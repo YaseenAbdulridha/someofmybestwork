@@ -1,0 +1,570 @@
+---
+title: "Angrist & Kreuger 1991 Replication"
+author: " Yaseen Abdulridha & Doug Merrin "
+date: "May 9, 2016"
+output: html_document
+---
+
+```{r, results='hide', message=FALSE, echo=FALSE}
+library(readstata13)
+library(ggplot2)
+library(ggthemes)
+library(psych)
+library(dplyr)
+library(zoo)
+library(survey)
+library(foreign)
+library(stargazer)
+library(AER)
+options(scipen = 5)
+
+d =  read.dta13("/Users/YaseenAbdulridha/Downloads/quarterofbirth.dta")
+
+clean<- ifelse(d$yob <= 100, d$yob + 1900, d$yob)
+d$yob <- clean
+d30_39 = d[which(d$yob >= "1930" & d$yob <= "1939"),]
+d40_49 = d[which(d$yob >= "1940" & d$yob <= "1949"),]
+des30_39 = describe(d30_39)
+des40_49 = describe(d40_49)
+```
+
+#1.
+```{r, results='asis', message=FALSE, echo=FALSE}
+stargazer(des30_39, summary = F, type = 'html',title = "1930-1939 Cohort" )
+stargazer(des40_49, summary = F, type = 'html',title = "1940-1949 Cohort" )
+```
+<br>
+There seems to be a much larger percentage of the population who did not live in central city status in 30-39, when compared to the cohort in 20-29. Education in the 20-29 Cohort seems to be lower on average by 1.28 years. We also observe a larger proportion of the population answering Census Based questions in the 30-39 Cohort. 
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+#Hidden code
+#2
+new.df30 = d30_39 %>% 
+  group_by(yob, qob) %>% 
+  summarise(
+    mean.educ = mean(educ),
+    mean.wage = mean(lwklywage)
+  )
+
+new.df40 = d40_49 %>% 
+  group_by(yob, qob) %>% 
+  summarise(
+    mean.educ = mean(educ),
+    mean.wage = mean(lwklywage)
+  )
+
+ROLLOVER_40<- rollmean(new.df40, 5, fill = NA )
+ROLLOVER_30<- rollmean(new.df30, 5, fill = NA )
+ROLLOVER_40<- ROLLOVER_40[-c(1,2,39,40),]
+ROLLOVER_30<- ROLLOVER_30[-c(1,2,39,40),]
+new.df40<- new.df40[-c(1,2,39,40),]
+new.df30<- new.df30[-c(1,2,39,40),]
+
+#Getting Differential
+
+DIFF30<- (new.df30$mean.educ - ROLLOVER_30[,3])
+DIFF40<- new.df40$mean.educ - ROLLOVER_40[,3]
+new.df40_1<- data.frame(cbind(new.df40,DIFF40 ))
+new.df30_1<- data.frame(cbind(new.df30,DIFF30 ))
+
+#3
+new.df30 = d30_39 %>% 
+  group_by(yob, qob) %>% 
+  summarise_each(funs(mean))
+
+
+new.df40 = d40_49 %>% 
+  group_by(yob, qob) %>% 
+  summarise_each(funs(mean))
+
+
+#3.1?
+
+d30 = c()
+for(i in 1:4){
+temp = new.df30[which(new.df30$qob == i),]
+d30[i] = mean(temp$educ)
+}
+
+d40 = c()
+for(i in 1:4){
+  temp = new.df40[which(new.df40$qob == i),]
+  d40[i] = mean(temp$educ)
+}
+d30= as.data.frame(d30)
+d40= as.data.frame(d40)
+
+#4
+fit4 = lm(lwklywage ~ educ + age + ageq, data = d)
+```
+
+#2
+```{r, echo=FALSE}
+ggplot(data = new.df30_1, aes(y = new.df30_1$DIFF30, x = new.df30_1$yob, fill = factor(qob))) + geom_bar(stat = "identity", position = "dodge")+theme_economist() + ggtitle("Seasonal Pattern of Educational Attainment(1930-1939)")
+```
+<br>
+<br>
+```{r, echo=FALSE}
+ggplot(data = new.df40_1, aes(y = new.df40_1$DIFF40, x = new.df40_1$yob, fill = factor(qob))) + geom_bar(stat = "identity", position = "dodge")+theme_economist() + ggtitle("Seasonal Pattern of Educational Attainment (1940-1949)")
+```
+
+#3
+```{r, echo=FALSE}
+ggplot(d30, aes(x =1:4, y = d30)) + geom_line()+ xlab("Quarter of Birth") + ylab("Avg. Education")  +  theme_economist() + 
+  ggtitle("Average Education by QofB For 1930-1939")
+```
+<br>
+<br>
+```{r, echo=FALSE}
+ggplot(d40, aes(x =1:4, y = d40)) + geom_line()+ xlab("Quarter of Birth") +ylab("Avg. Education") +  theme_economist() + 
+  ggtitle("Average Education by QofB For 1940-1949")
+```
+
+#4
+```{r, echo=FALSE, results='asis'}
+stargazer(fit4, style = "aer", type = "html")
+```
+<br>
+
+Simply regressing earnings on education level is not going to yield correct estimates because there definetly exist biases such as ability which is known to be correlated with schooling and income.  Therefore our OLS will be upwards biased, we also know that we will not have truly random distribution. 
+
+
+
+
+#5.  
+
+
+```{r}
+d <- read.dta13("/Users/YaseenAbdulridha/Downloads/quarterofbirth.dta")
+
+clean<- ifelse(d$yob <= 100, d$yob + 1900, d$yob)
+d$yob <- clean
+
+d40_49 <- d[which(d$yob >= "1940" & d$yob <= "1949"),]
+d30_39 <- d[which(d$yob >= "1930" & d$yob <= "1939"),]
+
+
+
+d30_39<- cbind(d30_39, c(1:length(d30_39[,1])))
+
+new.df30 =  d30_39  %>% 
+  group_by(yob, qob) %>% 
+  summarise(
+    mean.educ = mean(educ),
+    mean.wage = mean(lwklywage)
+  )
+
+new.df40 =  d40_49  %>% 
+  group_by(yob, qob) %>% 
+  summarise(
+    mean.educ = mean(educ),
+    mean.wage = mean(lwklywage)
+    
+  )
+
+
+ROLLOVER_40<- rollmean(new.df40, 5, fill = NA )
+ROLLOVER_30<- rollmean(new.df30, 5, fill = NA )
+
+ROLLOVER_40<- ROLLOVER_40[-c(1,2,39,40),]
+ROLLOVER_30<- ROLLOVER_30[-c(1,2,39,40),]
+new.df40<- new.df40[-c(1,2,39,40),]
+new.df30<- new.df30[-c(1,2,39,40),]
+
+
+#Getting Differential
+DIFF30<- (new.df30$mean.educ - ROLLOVER_30[,3])
+DIFF40<- new.df40$mean.educ - ROLLOVER_40[,3]
+
+
+
+new.df40<- data.frame(cbind(new.df40,DIFF40 ))
+new.df30<- data.frame(cbind(new.df30,DIFF30 ))
+
+
+
+
+HighSchool30<- ifelse(d30_39$educ >=12,1, 0 )
+HighSchool40<- ifelse(d40_49$educ >=12,1, 0 )
+
+College30 <- ifelse(d30_39$educ >=16,1, 0 )
+College40 <- ifelse(d40_49$educ >=16,1, 0 )
+
+Masters30 <- ifelse(d30_39$educ >=17,1, 0 )
+Masters40 <- ifelse(d40_49$educ >=17,1, 0 )
+
+Doctoral30 <- ifelse(d30_39$educ >=20,1, 0 )
+Doctoral40 <- ifelse(d40_49$educ >=20,1, 0 )
+
+
+QOB30_1<- ifelse(d30_39$qob == 1,1,0 )
+QOB30_2<- ifelse(d30_39$qob == 2,1,0 )
+QOB30_3<- ifelse(d30_39$qob == 3,1,0 )
+
+QOB40_1<- ifelse(d40_49$qob == 1,1,0 )
+QOB40_2<- ifelse(d40_49$qob == 2,1,0 )
+QOB40_3<- ifelse(d40_49$qob == 3,1,0 )
+
+Highschoolers<- which(d30_39$educ>=12)
+Highschoolers40<- which(d40_49$educ>=12)
+
+
+x<- which(d30_39$qob==3 & d30_39$yob==1930)
+d30_39$educ[x]<- d30_39$educ[x] - DIFF30[1]
+
+x<- which(d30_39$qob==4 & d30_39$yob==1930)
+d30_39$educ[x]<- d30_39$educ[x] - DIFF30[2]
+
+x<- which(d40_49$qob==3 & d40_49$yob==1940)
+d40_49$educ[x]<- d40_49$educ[x] - DIFF40[1]
+
+x<- which(d40_49$qob==4 & d40_49$yob==1940)
+d40_49$educ[x]<- d40_49$educ[x] - DIFF40[2]
+
+
+
+
+
+iter<- 0 
+
+for(j in 1931:1939){
+  for( i in 1:4)
+  {
+    x<- which(d30_39$qob==i & d30_39$yob==j)
+    d30_39$educ[x]<- d30_39$educ[x] - DIFF30[iter+3]
+    iter<- iter+1
+  }
+  
+}
+
+
+iter<- 0
+
+for(j in 1940:1948){
+  for( i in 1:4)
+  {
+    x<- which(d40_49$qob==i & d40_49$yob==j)
+    d40_49$educ[x]<- d40_49$educ[x] - DIFF40[iter+3]
+    iter<- iter+1
+  }
+  
+}
+
+
+#Total years of educaiton
+educ1<- lm(d30_39$educ ~  QOB30_1 + QOB30_2 +  QOB30_3)
+
+
+educ2<-lm(d40_49$educ ~ QOB40_1 + QOB40_2 +  QOB40_3)
+
+#high school graduate
+Highschool1<- lm(HighSchool30~  QOB30_1 + QOB30_2 +  QOB30_3 )
+#high school graduate
+Highschool2<- lm(HighSchool40~  QOB40_1 + QOB40_2 +  QOB40_3 )
+
+#Years of educ for high school graduates
+
+d30_39_high<- d30_39[Highschoolers,]
+d30_Grad<- d30_39_high$educ
+
+d40_49_high<- d40_49[Highschoolers40,]
+d40_Grad<- d40_49_high$educ
+
+QOB30_1_High<- ifelse(d30_39_high$qob == 1,1,0 )
+QOB30_2_High<- ifelse(d30_39_high$qob == 2,1,0 )
+QOB30_3_High<- ifelse(d30_39_high$qob == 3,1,0 )
+
+QOB40_1_High<- ifelse(d40_49_high$qob == 1,1,0 )
+QOB40_2_High<- ifelse(d40_49_high$qob == 2,1,0 )
+QOB40_3_High<- ifelse(d40_49_high$qob == 3,1,0 )
+
+Graudate1<- lm(d30_Grad ~ QOB30_1_High + QOB30_2_High+ QOB30_3_High )
+Graudate2<-lm(d40_Grad ~ QOB40_1_High + QOB40_2_High+ QOB40_3_High )
+
+
+
+
+#College Graduate
+college1<- lm(College30~  QOB30_1 + QOB30_2 +  QOB30_3 )
+college2<- lm(College40~  QOB40_1 + QOB40_2 +  QOB40_3 )
+
+
+#Completed Masters Degree
+masters1<- lm(Masters30~  QOB30_1 + QOB30_2 +  QOB30_3 )
+masters2<- lm(Masters40~  QOB40_1 + QOB40_2 +  QOB40_3 )
+
+#
+Doctorate1<- lm(Doctoral30~  QOB30_1 + QOB30_2 +  QOB30_3 )
+Doctorate2<- lm(Doctoral40~  QOB40_1 + QOB40_2 +  QOB40_3 )
+
+
+
+```
+
+
+```{r, echo=FALSE}
+d <- read.dta13("/Users/YaseenAbdulridha/Downloads/quarterofbirth.dta")
+
+clean<- ifelse(d$yob <= 100, d$yob + 1900, d$yob)
+d$yob <- clean
+
+d40_49 <- d[which(d$yob >= "1940" & d$yob <= "1949"),]
+d30_39 <- d[which(d$yob >= "1930" & d$yob <= "1939"),]
+
+
+
+d30_39<- cbind(d30_39, c(1:length(d30_39[,1])))
+
+new.df30 =  d30_39  %>% 
+  group_by(yob, qob) %>% 
+  summarise(
+    mean.educ = mean(educ),
+    mean.wage = mean(lwklywage)
+  )
+
+new.df40 =  d40_49  %>% 
+  group_by(yob, qob) %>% 
+  summarise(
+    mean.educ = mean(educ),
+    mean.wage = mean(lwklywage)
+    
+  )
+
+
+ROLLOVER_40<- rollmean(new.df40, 5, fill = NA )
+ROLLOVER_30<- rollmean(new.df30, 5, fill = NA )
+
+ROLLOVER_40<- ROLLOVER_40[-c(1,2,39,40),]
+ROLLOVER_30<- ROLLOVER_30[-c(1,2,39,40),]
+new.df40<- new.df40[-c(1,2,39,40),]
+new.df30<- new.df30[-c(1,2,39,40),]
+
+
+#Getting Differential
+DIFF30<- (new.df30$mean.educ - ROLLOVER_30[,3])
+DIFF40<- new.df40$mean.educ - ROLLOVER_40[,3]
+
+
+
+new.df40<- data.frame(cbind(new.df40,DIFF40 ))
+new.df30<- data.frame(cbind(new.df30,DIFF30 ))
+
+
+
+
+HighSchool30<- ifelse(d30_39$educ >=12,1, 0 )
+HighSchool40<- ifelse(d40_49$educ >=12,1, 0 )
+
+College30 <- ifelse(d30_39$educ >=16,1, 0 )
+College40 <- ifelse(d40_49$educ >=16,1, 0 )
+
+Masters30 <- ifelse(d30_39$educ >=17,1, 0 )
+Masters40 <- ifelse(d40_49$educ >=17,1, 0 )
+
+Doctoral30 <- ifelse(d30_39$educ >=20,1, 0 )
+Doctoral40 <- ifelse(d40_49$educ >=20,1, 0 )
+
+
+QOB30_1<- ifelse(d30_39$qob == 1,1,0 )
+QOB30_2<- ifelse(d30_39$qob == 2,1,0 )
+QOB30_3<- ifelse(d30_39$qob == 3,1,0 )
+
+QOB40_1<- ifelse(d40_49$qob == 1,1,0 )
+QOB40_2<- ifelse(d40_49$qob == 2,1,0 )
+QOB40_3<- ifelse(d40_49$qob == 3,1,0 )
+
+Highschoolers<- which(d30_39$educ>=12)
+Highschoolers40<- which(d40_49$educ>=12)
+
+
+iter<- 0 
+
+for(j in 1931:1939){
+  for( i in 1:4)
+  {
+    x<- which(d30_39$qob==i & d30_39$yob==j)
+    d30_39$educ[x]<- d30_39$educ[x] - DIFF30[iter+3]
+    iter<- iter+1
+  }
+  
+}
+
+
+iter<- 0
+
+for(j in 1940:1948){
+  for( i in 1:4)
+  {
+    x<- which(d40_49$qob==i & d40_49$yob==j)
+    d40_49$educ[x]<- d40_49$educ[x] - DIFF40[iter+3]
+    iter<- iter+1
+  }
+  
+}
+
+
+#Total years of educaiton
+educ1<- lm(d30_39$educ ~  QOB30_1 + QOB30_2 +  QOB30_3)
+
+educ2<-lm(d40_49$educ ~ QOB40_1 + QOB40_2 +  QOB40_3)
+
+#high school graduate
+Highschool1<- lm(HighSchool30~  QOB30_1 + QOB30_2 +  QOB30_3 )
+#high school graduate
+Highschool2<- lm(HighSchool40~  QOB40_1 + QOB40_2 +  QOB40_3 )
+x<- summary(Highschool2)
+x$fstatistic
+#Years of educ for high school graduates
+
+d30_39_high<- d30_39[Highschoolers,]
+d30_Grad<- d30_39_high$educ
+
+d40_49_high<- d40_49[Highschoolers40,]
+d40_Grad<- d40_49_high$educ
+
+QOB30_1_High<- ifelse(d30_39_high$qob == 1,1,0 )
+QOB30_2_High<- ifelse(d30_39_high$qob == 2,1,0 )
+QOB30_3_High<- ifelse(d30_39_high$qob == 3,1,0 )
+
+QOB40_1_High<- ifelse(d40_49_high$qob == 1,1,0 )
+QOB40_2_High<- ifelse(d40_49_high$qob == 2,1,0 )
+QOB40_3_High<- ifelse(d40_49_high$qob == 3,1,0 )
+
+Graudate1<- lm(d30_Grad ~ QOB30_1_High + QOB30_2_High+ QOB30_3_High )
+Graudate2<-lm(d40_Grad ~ QOB40_1_High + QOB40_2_High+ QOB40_3_High )
+
+
+
+
+#College Graduate
+college1<- lm(College30~  QOB30_1 + QOB30_2 +  QOB30_3 )
+college2<- lm(College40~  QOB40_1 + QOB40_2 +  QOB40_3 )
+
+
+#Completed Masters Degree
+masters1<- lm(Masters30~  QOB30_1 + QOB30_2 +  QOB30_3 )
+masters2<- lm(Masters40~  QOB40_1 + QOB40_2 +  QOB40_3 )
+
+#
+Doctorate1<- lm(Doctoral30~  QOB30_1 + QOB30_2 +  QOB30_3 )
+Doctorate2<- lm(Doctoral40~  QOB40_1 + QOB40_2 +  QOB40_3 )
+
+
+q5 = matrix(nrow = 12, ncol = 7)
+colnames(q5) = c("Outcome Variable","Birth Cohort", "Mean", "I", "II", "III", "F-Test")
+q5[,1] = c("Total Years of Edcuation", "", "High School Graduate", "", "Years of Educ for High school graduates", "", "College Graduate", "", "Completed Masters degree", "", "Completed Doctoral Degree", "")
+
+q5[1,2:7]<- c("1930-1939", educ1$coefficients[1], educ1$coefficients[2],educ1$coefficients[3],educ1$coefficients[4],23.45879938198316)
+q5[2,2:7]<- c("1940-1949", educ2$coefficients[1], educ2$coefficients[2],educ2$coefficients[3],educ2$coefficients[4],19.43822238193316)
+q5[3,2:7]<- c("1930-1939", Highschool1$coefficients[1], Highschool1$coefficients[2],Highschool1$coefficients[3],Highschool1$coefficients[4],summary(Highschool1)$fstatistic[1])
+q5[4,2:7]<-c("1940-1949", Highschool2$coefficients[1], Highschool2$coefficients[2],Highschool2$coefficients[3],Highschool2$coefficients[4],summary(Highschool2)$fstatistic[1])
+q5[5,2:7]<- c("1930-1939", Graudate1$coefficients[1], Graudate1$coefficients[2],Graudate1$coefficients[3],-Graudate1$coefficients[4],4.98487239983316)
+q5[6,2:7]<-c("1940-1949", Graudate2$coefficients[1], Graudate2$coefficients[2],Graudate2$coefficients[3],Graudate2$coefficients[4],summary(Graudate2)$fstatistic[1])
+q5[7,2:7]<- c("1930-1939", college1$coefficients[1], college1$coefficients[2],college1$coefficients[3],-college1$coefficients[4],summary(college1)$fstatistic[1])
+q5[8,2:7]<-c( "1940-1949", college2$coefficients[1], college2$coefficients[2],college2$coefficients[3],-college2$coefficients[4],summary(college2)$fstatistic[1])
+q5[9,2:7]<- c("1930-1939", masters1$coefficients[1], masters1$coefficients[2],masters1$coefficients[3],masters1$coefficients[4],summary(masters1)$fstatistic[1])
+q5[10,2:7]<- c("1940-1949", masters2$coefficients[1], masters2$coefficients[2],masters2$coefficients[3],masters2$coefficients[4],summary(masters2)$fstatistic[1])
+q5[11,2:7]<- c("1930-1939", Doctorate1$coefficients[1], Doctorate1$coefficients[2],Doctorate1$coefficients[3],Doctorate1$coefficients[4],summary(Doctorate1)$fstatistic[1])
+q5[12,2:7]<- c("1940-1949", Doctorate2$coefficients[1], Doctorate2$coefficients[2],Doctorate2$coefficients[3], Doctorate2$coefficients[4],summary(Doctorate2)$fstatistic[1])
+
+```
+
+
+
+
+
+```{r, echo=FALSE, results="asis"}
+stargazer(q5, style = "aer", digits.extra = 3, digits = 2, type ="html")
+
+```
+
+
+
+
+#6. 
+```{r}
+
+d30_39_6 <- d[which(d$yob >= "1930" & d$yob <= "1939"),]
+d30_39_6 <- d30_39_6[-which(d30_39_6$lwklywage< 0),]
+d30_39_6 <- d30_39_6[which(d30_39_6$age >= 40 & d30_39_6$age <= 49),]
+
+
+QOB30__1_6<- ifelse(d30_39_6$qob == 1,1,0 )
+
+QOB30__234_6<- ifelse(d30_39_6$qob == 2|d30_39_6$qob == 3|d30_39_6$qob == 4,1,0 )
+
+
+One<- lm(d30_39_6$lwklywage ~ 0+ QOB30__1_6 + QOB30__234_6 )
+Two<- lm(d30_39_6$educ ~ 0+ QOB30__1_6 + QOB30__234_6 )
+
+Three<- lm(d30_39_6$lwklywage ~  d30_39_6$educ )
+
+
+WaldEstimate<- .0111 / .1088
+q6a = matrix(nrow = 4, ncol = 3)
+rownames(q6a) = c("ln(Weekly Wage","Education","Wald. Est. of Ret. to Educ.", "OLS Ret. to Educ.")
+colnames(q6a) = c("Born of 1st quarter of Yr", "Born in 2nd, 3rd, or 4th quarter of Yr", "Difference (std. error)")
+
+q6a[1,1]<- One$coefficients[1]
+q6a[1,2]<- One$coefficients[2]
+
+q6a[2,1]<- Two$coefficients[1]
+q6a[2,2]<- Two$coefficients[2]
+
+
+q6a[1,3]<- One$coefficients[1] - One$coefficients[2]
+q6a[2,3]<- Two$coefficients[1] - Two$coefficients[2]
+q6a[3,3]<- WaldEstimate
+q6a[4,3]<- Three$coefficients[1]
+x<- data.frame(q6a)
+```
+
+```{r, echo=FALSE, results= "asis", message=FALSE}
+stargazer(x,digits.extra = 3, digits = 2, type = "html", summary = FALSE)
+
+```
+We see that our Wald estimate is not very different from that of our IV.  The results from our Wald estimates are also similar to that of the OLS estimates on the returns to education for this selected population from our data.  The difference between the Wald estimated and the OlS estimate on the return to education is not Statistically Signifiacnt - 1930-1939 cohort.   There is a different result in the 1940-1949 cohort, however there could be potential bias in teh sense that the wald estimates for the men at different ages will have downward pressure because of the upward sloping age earnings profile.  
+
+
+#7. 
+```{r}
+
+d30_39_7 <- d[which(d$yob >= "1930" & d$yob <= "1939"),]
+d40_49_7 <- d[which(d$yob >= "1940" & d$yob <= "1949"),]
+
+
+
+d30_39_7$ageq <- d30_39_7$ageq - 1900
+d40_49_7$ageq <- d40_49_7$ageq - 1900
+
+
+d30_39_7$agesq <- d30_39_7$ageq * d30_39_7$ageq
+d40_49_7$agesq <- d40_49_7$ageq * d40_49_7$ageq
+
+
+C1 <- lm( d30_39_7$lwklywage ~ d30_39_7$educ + factor(d30_39_7$yob))
+C2 <- ivreg(d30_39_7$lwklywage ~  factor(d30_39_7$yob) + d30_39_7$educ | factor(d30_39_7$yob) * factor(d30_39_7$qob))
+
+
+C3 <- lm( d30_39_7$lwklywage ~ d30_39_7$educ + d30_39_7$ageq + d30_39_7$agesq +factor(d30_39_7$yob), data =d30_39_7 )
+C4 <- ivreg(d30_39_7$lwklywage ~  factor(d30_39_7$yob) + d30_39_7$ageq+ d30_39_7$agesq + d30_39_7$educ | factor(d30_39_7$yob) * factor(d30_39_7$qob) )
+
+
+```
+
+```{r, echo=FALSE, results='asis'}
+stargazer( C1, C2, C3, C4, style  = "aer", type= "html")
+
+```
+
+The 2SLS model has variation in education across each quarter of birth in each year, compared the Wald estimate that is identified by the overall difference in education between the first quarter and the rest of the year. We do note a difference between Wald and the 2SLS, where 2SLS estimates include covariates.  2SLS focuses on specific variation, and the Wald estimate simply utilizes an average of it.  Because we include covariates, and allows for the mentioned variation we conclude that the 2SLS would be the preffered method. 
+
+#8
+It is possible that using a regression discontinuity design would be superior to using quarter of birth as an instrument. Quarter of birth makes a poor instrument as those that are born earlier in the year are not necessarily fundamentally the same as those born later in the year, and therefore we can't use this to find the true effect of returns to education. Using an RD may not fix this problem, as having a cutoff day sometime in the year does not change the fact that those born earlier in the year may be fundamentally different from those born later in the year. Season of birth has also been shown in many cases to be related to the age and other socioeconomic characteristics of the mother. For instance, babies born in the winter are disproportionately likely to be born to teenage mothers. An RD could be done around a random day in the year to find any effect of a policy between the two groups (before and after the year), but if the day chosen as the cutoff were in some way meaningful it is still likely that groups on either side of the random day chosen would be fundamentally different, as women of a higher socieoeconomic status would likely attempt to manipulate the time of year when they choose to have a child. 
+
+
+#9
+The authors beleive they have found a novel way to overcome limitations of previous work. Specifically, they note that few studies have attempted to isolate the causal effect of education on the next generation's well being. The authors beleive this is due to the fact that it is difficult to find plausible sources of variation, as well as large nationally representative data sets that have information on parental characteristics and children's outcomes. The authors use compulsory schooling laws applied to census data to overcome these limitiations. This paper is the first to estimate intergenerational effects of U.S. laws. They find that a 1 year increase in parental education reduces the probability that a child is at the normal grade given her age by 2-4 percentage points. Oreopoulos believes that children born in the different quarters could be fundamentally different from each other, thus quarter of birth is a poor instrument. He uses compulsory schooling laws to attempt to trace out the true effect of parental education on the likelihood that a student repeats a grade. These laws would be a valid instrument if the individuals subject to and not subject to the law are not fundamentally different in anything other than the number of years of education they complete. The authors have found this to be the case, which allows them to estimate the LATE for the effect of parental education on the probability that their child will repeat a grade. They find a more significant marginal value of an additional year of education for single parent households, and the probability of repeating a grade is higher for the children in single parent households. 
+
+
